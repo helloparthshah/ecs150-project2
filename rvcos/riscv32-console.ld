@@ -12,14 +12,8 @@ MEMORY
 {
     /* riscv-console virt machine FLASH */
     FLASH (rx)  : ORIGIN = 0x00000000, LENGTH = 16M
-    /* Cartridge ROM */
-    ROM (rx)  : ORIGIN = 0x20000000, LENGTH = 16M
-    /* Chipset Regs */
-    REGS (rx)  : ORIGIN = 0x40000000, LENGTH = 72B
-    /* Video Controller Memory */
-    VCM (rx)  : ORIGIN = 0x50000000, LENGTH = 1M
     /* riscv-console virt machine RAM */
-    RAM (rwx)   : ORIGIN = 0x70000000, LENGTH = 16M
+    RAM (rwx)   : ORIGIN = 0x70000000, LENGTH = 2M
     
 }
 ENTRY(_start)
