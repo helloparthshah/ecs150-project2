@@ -1,11 +1,28 @@
 // #include "RVCOS.h"
+#include "RVCOS.h"
 #include <stdint.h>
+#include <stdlib.h>
 
 volatile int global = 42;
 volatile uint32_t controller_status = 0;
 volatile uint32_t cartridge_status = 0;
 
 volatile char *VIDEO_MEMORY = (volatile char *)(0x50000000 + 0xFE800);
+
+void *_sbrk(incr) int incr;
+{
+  extern char _heapbase; /* Set by linker.  */
+  static char *heap_end;
+  char *prev_heap_end;
+
+  if (heap_end == 0)
+    heap_end = &_heapbase;
+
+  prev_heap_end = heap_end;
+  heap_end += incr;
+
+  return (void *)prev_heap_end;
+}
 
 int len(char *p) {
   int c = 0;
@@ -24,24 +41,48 @@ void write(char *c, int start) {
   }
 }
 
+void writei(uint32_t c, int start, int size) {
+  for (int i = 0; i < size; i++) {
+    writec(((c >> i) & 1) + '0', start + size - 1 - i);
+  }
+}
+
+uint32_t bitExtracted(uint32_t number, uint32_t k, uint32_t p) {
+  return (((1 << k) - 1) & (number >> (p - 1)));
+}
+
+TStatus RVCInitalize(uint32_t *gp) {
+  // asm volatile("la gp, %0" : : "r"(gp));
+  int *m = (int *)malloc(10 * sizeof(uint32_t));
+  m[9] = 2;
+  writei(*(m + 9), 2 * 0x40, 8);
+  return RVCOS_STATUS_SUCCESS;
+}
+
+volatile int isInit = 0;
+
 int main() {
   int a = 4;
   int b = 12;
   int last_global = 42;
   int x_pos = 12;
 
-  write("Hello World!X", 0);
-
   while (1) {
     int c = a + b + global;
     if (global != last_global) {
-      if (cartridge_status)
-        writec(cartridge_status + '0', 0);
+      writei(global, 0x40, 32);
+      writei(bitExtracted(cartridge_status, 29, 2), 0, 30);
+      if (cartridge_status) {
+        if (cartridge_status & 0x1 && isInit == 0) {
+          isInit = 1;
+          // itoa((cartridge_status >> 0) & 1, buf, 10);
+          RVCInitalize((uint32_t *)&cartridge_status);
+          global = cartridge_status >> 2;
+        }
+      }
 
       if (controller_status) {
-        writec(controller_status + '0', 1);
-        VIDEO_MEMORY[x_pos] = ' ';
-        VIDEO_MEMORY[0] = ' ';
+        writec(' ', x_pos);
         if (controller_status & 0x1) {
           if (x_pos & 0x3F) {
             x_pos--;

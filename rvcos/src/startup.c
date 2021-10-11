@@ -7,6 +7,7 @@ extern uint8_t _sdata[];
 extern uint8_t _esdata[];
 extern uint8_t _bss[];
 extern uint8_t _ebss[];
+extern uint8_t _heap_base;
 
 // Adapted from
 // https://stackoverflow.com/questions/58947716/how-to-interact-with-risc-v-csrs-by-using-gcc-c-code
