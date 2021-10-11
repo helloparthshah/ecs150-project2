@@ -52,10 +52,7 @@ uint32_t bitExtracted(uint32_t number, uint32_t k, uint32_t p) {
 }
 
 TStatus RVCInitalize(uint32_t *gp) {
-  // asm volatile("la gp, %0" : : "r"(gp));
   int *m = (int *)malloc(10 * sizeof(uint32_t));
-  m[9] = 2;
-  writei(*(m + 9), 2 * 0x40, 8);
   return RVCOS_STATUS_SUCCESS;
 }
 

@@ -16,7 +16,8 @@ MEMORY
     RAM (rwx)   : ORIGIN = 0x70000000, LENGTH = 2M
     
 }
-ENTRY(_start)
+/* Specify what is the start/ entry position (from crt0.s) */
+ENTRY(_start) 
 SEARCH_DIR("/opt/riscv32/riscv32-unknown-elf/lib");
 SECTIONS
 {
