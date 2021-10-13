@@ -32,7 +32,7 @@ TStatus RVCWriteText(const TTextCharacter *buffer, TMemorySize writesize) {
 
 void writei(uint32_t c, int start) {
   char hex[32];
-  sprintf(hex, "%x", c);
+  sprintf(hex, "%p", &c);
   write(hex, start);
   // RVCWriteText(hex, len(hex));
 }
@@ -52,7 +52,7 @@ TStatus RVCInitalize(uint32_t *gp) {
   for (int i = 0; i < 10; i++) {
     m[i] = i + 1;
   }
-  writei(&m[0], 3 * 0x40);
+  writei(m[0], 3 * 0x40);
   return RVCOS_STATUS_SUCCESS;
 }
 
@@ -73,7 +73,7 @@ int main() {
       // RVCWriteText("Text", 4);
       // writei(cartridge_status, 0);
       writei(global, 0x40);
-      writei(&_heap_base, 2 * 0x40);
+      writei(_heap_base, 2 * 0x40);
 
       if (cartridge_status) {
         if (cartridge_status & 0x1 && isInit == 0) {
