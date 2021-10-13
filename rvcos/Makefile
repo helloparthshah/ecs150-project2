@@ -26,6 +26,7 @@ endif
 
 LDFILE   = riscv32-console.ld
 INCLUDE  += -I $(INC_DIR)
+# https://interrupt.memfault.com/blog/boostrapping-libc-with-newlib#enabling-newlib
 CFLAGS   += -ffreestanding  -nostartfiles
 # CFLAGS   += -ffreestanding  -nostartfiles -nostdlib -nodefaultlibs
 LDFLAGS  +=

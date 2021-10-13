@@ -1,6 +1,6 @@
 .section .text, "ax"
 .global _interrupt_handler
-_interrupt_handler:
+_interrupt_handler: # Saves the regs, calls the c handler and then restores the registers
     addi	sp,sp,-40
     sw	    ra,36(sp)
     sw	    t0,32(sp)
@@ -12,7 +12,7 @@ _interrupt_handler:
     sw	    a3,8(sp)
     sw	    a4,4(sp)
     sw	    a5,0(sp)
-    call    c_interrupt_handler
+    call    c_interrupt_handler # Calling the c function
     lw	    ra,36(sp)
     lw	    t0,32(sp)
     lw	    t1,28(sp)

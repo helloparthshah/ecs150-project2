@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdlib.h>
 
 extern uint8_t _erodata[];
 extern uint8_t _data[];
@@ -8,6 +9,24 @@ extern uint8_t _esdata[];
 extern uint8_t _bss[];
 extern uint8_t _ebss[];
 extern uint8_t _heap_base;
+
+void *_sbrk(int incr) {
+/*   extern char _heapbase; */ /* Defined by the linker */
+  extern char __stack_top;
+  static char *heap_end;
+  char *prev_heap_end;
+
+  if (heap_end == 0) {
+    heap_end = &_heap_base;
+  }
+  prev_heap_end = heap_end;
+  if (heap_end + incr > &__stack_top) {
+    abort();
+  }
+
+  heap_end += incr;
+  return (void *)prev_heap_end;
+}
 
 // Adapted from
 // https://stackoverflow.com/questions/58947716/how-to-interact-with-risc-v-csrs-by-using-gcc-c-code
@@ -25,7 +44,7 @@ __attribute__((always_inline)) inline void csr_write_mie(uint32_t val) {
   asm volatile("csrw mie, %0" : : "r"(val));
 }
 
-__attribute__((always_inline)) inline void csr_enable_interrupts(void) {
+__attribute__((always_inline)) extern inline void csr_enable_interrupts(void) {
   asm volatile("csrsi mstatus, 0x8");
 }
 
@@ -44,7 +63,6 @@ void init(void) {
   uint8_t *Source = _erodata;
   uint8_t *Base = _data < _sdata ? _data : _sdata;
   uint8_t *End = _edata > _esdata ? _edata : _esdata;
-
   while (Base < End) {
     *Base++ = *Source++;
   }
