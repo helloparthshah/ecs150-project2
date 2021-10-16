@@ -48,7 +48,7 @@ typedef struct {
   uint32_t DReserved : 28;
 } SControllerStatus, *SControllerStatusRef;
 
-TStatus RVCInitalize(uint32_t *gp);
+TStatus RVCInitialize(uint32_t *gp);
 
 TStatus RVCTickMS(uint32_t *tickmsref);
 TStatus RVCTickCount(TTickRef tickref);

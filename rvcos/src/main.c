@@ -25,7 +25,7 @@ void writei(uint32_t c, int start) {
   write(hex, start);
 }
 
-TStatus RVCInitalize(uint32_t *gp) { return RVCOS_STATUS_SUCCESS; }
+TStatus RVCInitialize(uint32_t *gp) { return RVCOS_STATUS_SUCCESS; }
 
 TStatus RVCTickMS(uint32_t *tickmsref) { return RVCOS_STATUS_SUCCESS; }
 TStatus RVCTickCount(TTickRef tickref) { return RVCOS_STATUS_SUCCESS; }
