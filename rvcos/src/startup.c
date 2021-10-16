@@ -11,18 +11,17 @@ extern uint8_t _ebss[];
 extern uint8_t _heap_base;
 
 void *_sbrk(int incr) {
-/*   extern char _heapbase; */ /* Defined by the linker */
-  extern char __stack_top;
+  // extern char __stack_top;
   static char *heap_end;
   char *prev_heap_end;
 
   if (heap_end == 0) {
-    heap_end = &_heap_base;
+    heap_end = (char *)&_heap_base;
   }
   prev_heap_end = heap_end;
-  if (heap_end + incr > &__stack_top) {
-    abort();
-  }
+  /*   if (heap_end + incr > &__stack_top) {
+      abort();
+    } */
 
   heap_end += incr;
   return (void *)prev_heap_end;
@@ -33,6 +32,12 @@ void *_sbrk(int incr) {
 __attribute__((always_inline)) inline uint32_t csr_mstatus_read(void) {
   uint32_t result;
   asm volatile("csrr %0, mstatus" : "=r"(result));
+  return result;
+}
+
+__attribute__((always_inline)) inline uint32_t csr_mcause_read(void) {
+  uint32_t result;
+  asm volatile("csrr %0, mcause" : "=r"(result));
   return result;
 }
 
@@ -83,6 +88,9 @@ extern volatile uint32_t controller_status;
 extern volatile uint32_t cartridge_status;
 
 void c_interrupt_handler(void) {
+  if (csr_mcause_read() == 11) {
+    return;
+  }
   uint64_t NewCompare = (((uint64_t)MTIMECMP_HIGH) << 32) | MTIMECMP_LOW;
   NewCompare += 100;
   MTIMECMP_HIGH = NewCompare >> 32;
