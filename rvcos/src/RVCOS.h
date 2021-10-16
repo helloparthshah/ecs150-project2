@@ -48,22 +48,58 @@ typedef struct {
   uint32_t DReserved : 28;
 } SControllerStatus, *SControllerStatusRef;
 
+/* RVCInitialize() initializes the cartridges main thread and sets the
+cartridges global pointer through the gp variable. This system call be invoked
+as part of the cartridge startup code. */
 TStatus RVCInitialize(uint32_t *gp);
 
 TStatus RVCTickMS(uint32_t *tickmsref);
 TStatus RVCTickCount(TTickRef tickref);
 
+/* RVCThreadCreate() creates a thread in the RVCOS. Once created the thread is
+ in the created state RVCOS_THREAD_STATE_CREATED.  The entryparameter
+ specifies the  function  of  the thread, and paramspecifies the parameter
+ that  is passed to the function. The size of the threads stack is specified
+ by memsize, and the priority is specified by prio. The thread identifier is
+ put into the location specified by the tidparameter. */
 TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
                         TThreadPriority prio, TThreadIDRef tid);
+/* RVCThreadDelete() deletes the dead thread specified by threadparameter from
+ the RVCOS. */
 TStatus RVCThreadDelete(TThreadID thread);
+/* RVCThreadActivate() activates the newly created or dead thread specified by
+ threadparameter in the RVCOS.  After  activation  the  thread  enters  the
+ RVCOS_THREAD_STATE_READY state, and must begin at the entryfunction
+ specified. */
 TStatus RVCThreadActivate(TThreadID thread);
+/* RVCThreadTerminate() terminates the thread specified by threadparameter in
+ the RVCOS. After termination the thread enters the state
+ RVCOS_THREAD_STATE_DEAD, and the thread return value returnval is  stored  for
+ return  values  from  RVCThreadWait().  The  termination  of  a  thread can
+ trigger another thread to be scheduled. */
 TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval);
+/* RVCThreadWait()  waits  for  the  thread  specified  by threadparameter  to
+ terminate.  The  return value  passed  with  the  associated
+ RVCThreadTerminate()  call  will  be  placed  in  the  location specified by
+ returnref. RVCThreadWait() can be called multiple times per thread. */
 TStatus RVCThreadWait(TThreadID thread, TThreadReturnRef returnref);
+/*RVCThreadID() puts the thread identifier of the currently running thread in
+ the location specified by threadref. */
 TStatus RVCThreadID(TThreadIDRef threadref);
+/* RVCThreadState() retrieves the state of the thread specified by threadand
+ places the state in the location specified by state. */
 TStatus RVCThreadState(TThreadID thread, TThreadStateRef stateref);
+/* RVCThreadSleep() puts the currently running thread to sleep for tickticks. If
+ tick is specified as RVCOS_TIMEOUT_IMMEDIATEthe  current  process  yields
+ the  remainder  of  its  processing quantum to the next ready processof equal
+ priority. */
 TStatus RVCThreadSleep(TTick tick);
 
+/* RVCWriteText()  writes writesizecharacters  starting  at  the  location
+ specified  by buffer to  the RISC-V Console in text mode. */
 TStatus RVCWriteText(const TTextCharacter *buffer, TMemorySize writesize);
+/* RVCReadController() reads the current status of the RISC-V Console controller
+ into the location specified by statusref. */
 TStatus RVCReadController(SControllerStatusRef statusref);
 
 #endif

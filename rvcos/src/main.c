@@ -1,4 +1,5 @@
 // #include "RVCOS.h"
+#include "Deque.h"
 #include "RVCOS.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -25,13 +26,26 @@ void writei(uint32_t c, int start) {
   write(hex, start);
 }
 
-TStatus RVCInitialize(uint32_t *gp) { return RVCOS_STATUS_SUCCESS; }
+volatile struct Deque *TCB;
+
+volatile uint32_t cart_gp = 0;
+TStatus RVCInitialize(uint32_t *gp) {
+  TCB = dmalloc();
+  cart_gp = (uint32_t)gp;
+  return RVCOS_STATUS_SUCCESS;
+}
 
 TStatus RVCTickMS(uint32_t *tickmsref) { return RVCOS_STATUS_SUCCESS; }
 TStatus RVCTickCount(TTickRef tickref) { return RVCOS_STATUS_SUCCESS; }
 
 TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
                         TThreadPriority prio, TThreadIDRef tid) {
+  struct Thread t;
+  t.id = *tid;
+  t.priority = prio;
+  t.memSize = memsize;
+  t.state = RVCOS_THREAD_STATE_CREATED;
+  push_back(TCB, t);
   return RVCOS_STATUS_SUCCESS;
 }
 TStatus RVCThreadDelete(TThreadID thread) { return RVCOS_STATUS_SUCCESS; }
@@ -59,6 +73,15 @@ TStatus RVCWriteText(const TTextCharacter *buffer, TMemorySize writesize) {
   return RVCOS_STATUS_SUCCESS;
 }
 TStatus RVCReadController(SControllerStatusRef statusref) {
+  statusref->DLeft = controller_status & 0x1;
+  statusref->DUp = controller_status & 0x2;
+  statusref->DDown = controller_status & 0x3;
+  statusref->DRight = controller_status & 0x4;
+  statusref->DButton1 = controller_status & 0x5;
+  statusref->DButton2 = controller_status & 0x6;
+  statusref->DButton3 = controller_status & 0x7;
+  statusref->DButton4 = controller_status & 0x8;
+  statusref->DReserved = controller_status >> 8;
   return RVCOS_STATUS_SUCCESS;
 }
 
@@ -75,15 +98,14 @@ int main() {
 
   while (1) {
     writei(global, 9 * 0x40);
-    writei(&_heap_base, 10 * 0x40);
     if (cartridge_status & 0x1 && isInit == 0) {
       isInit = 1;
-      write("Cartridge entered", 8 * 0x40 + 32);
+      write("Cartridge entered", 8 * 0x40);
       enter_cartridge();
     }
     if (!(cartridge_status & 0x1) && isInit == 1) {
       isInit = 0;
-      write("                 ", 8 * 0x40 + 32);
+      write("                 ", 8 * 0x40);
     }
   }
   return 0;
@@ -91,9 +113,10 @@ int main() {
 
 uint32_t c_syscall_handler(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3,
                            uint32_t a4, uint32_t code) {
+  writei(code, 0);
   TStatus status = RVCOS_STATUS_FAILURE;
   if (code == 0) {
-    status = RVCInitalize(a0);
+    status = RVCInitialize(a0);
   } else if (code == 1) {
     status = RVCThreadCreate(a0, a1, a2, a3, a4);
   } else if (code == 2) {
