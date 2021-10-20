@@ -18,7 +18,7 @@ volatile char *VIDEO_MEMORY = (volatile char *)(0x50000000 + 0xFE800);
 
 __attribute__((always_inline)) inline uint32_t get_tp(void) {
   uint32_t result;
-  asm volatile("la tp, %0" ::"r"(result));
+  asm volatile("la %0, tp" : "=r"(result));
   return result;
 }
 
