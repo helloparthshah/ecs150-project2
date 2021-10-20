@@ -11,7 +11,6 @@ extern uint8_t _ebss[];
 extern uint8_t _heap_base;
 
 void *_sbrk(int incr) {
-  // extern char __stack_top;
   static char *heap_end;
   char *prev_heap_end;
 
@@ -19,10 +18,6 @@ void *_sbrk(int incr) {
     heap_end = (char *)&_heap_base;
   }
   prev_heap_end = heap_end;
-  /*   if (heap_end + incr > &__stack_top) {
-      abort();
-    } */
-
   heap_end += incr;
   return (void *)prev_heap_end;
 }
@@ -62,7 +57,6 @@ __attribute__((always_inline)) inline void csr_disable_interrupts(void) {
 #define MTIMECMP_LOW (*((volatile uint32_t *)0x40000010))
 #define MTIMECMP_HIGH (*((volatile uint32_t *)0x40000014))
 #define CONTROLLER (*((volatile uint32_t *)0x40000018))
-#define CARTRIDGE (*((volatile uint32_t *)0x4000001C))
 
 void init(void) {
   uint8_t *Source = _erodata;
@@ -77,25 +71,19 @@ void init(void) {
     *Base++ = 0;
   }
 
-  csr_write_mie(0x888);    // Enable all interrupt sources
+  /* csr_write_mie(0x888);    // Enable all interrupt sources
   csr_enable_interrupts(); // Global interrupt enable
   MTIMECMP_LOW = 1;
-  MTIMECMP_HIGH = 0;
+  MTIMECMP_HIGH = 0; */
 }
 
 extern volatile int global;
 extern volatile uint32_t controller_status;
-extern volatile uint32_t cartridge_status;
 
 void c_interrupt_handler(void) {
-  if (csr_mcause_read() == 11) {
-    return;
-  }
   uint64_t NewCompare = (((uint64_t)MTIMECMP_HIGH) << 32) | MTIMECMP_LOW;
   NewCompare += 100;
   MTIMECMP_HIGH = NewCompare >> 32;
   MTIMECMP_LOW = NewCompare;
   global++;
-  controller_status = CONTROLLER;
-  cartridge_status = CARTRIDGE;
 }

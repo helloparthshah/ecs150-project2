@@ -1,5 +1,6 @@
 .section .text, "ax"
 .global _interrupt_handler
+
 _interrupt_handler: # Saves the regs, calls the c handler and then restores the registers
     csrw    mscratch,ra
     csrr    ra,mcause
@@ -9,12 +10,17 @@ _interrupt_handler: # Saves the regs, calls the c handler and then restores the 
     addi    sp,sp,-8
     sw      ra,4(sp)
     sw      gp,0(sp)
+    .option push
+    .option norelax
+    la      gp, __global_pointer$
+    .option pop
     call    c_syscall_handler
     lw      ra,4(sp)
     lw      gp,0(sp)
     addi    sp,sp,8
     csrw    mepc,ra
     mret
+
 hardware_interrupt:
     csrr    ra,mscratch
     addi	sp,sp,-40 # Move back 40 to save 10 regs

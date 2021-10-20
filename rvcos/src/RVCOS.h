@@ -45,7 +45,7 @@ typedef struct {
   uint32_t DButton2 : 1;
   uint32_t DButton3 : 1;
   uint32_t DButton4 : 1;
-  uint32_t DReserved : 28;
+  uint32_t DReserved : 26;
 } SControllerStatus, *SControllerStatusRef;
 
 /* RVCInitialize() initializes the cartridges main thread and sets the

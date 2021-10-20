@@ -1,38 +1,42 @@
 #ifndef DEQUE
 #define DEQUE
 #include "RVCOS.h"
+#include <stdint.h>
 #include <stdlib.h>
 
-struct Thread {
+typedef struct {
+  uint32_t *sp;
+  TThreadEntry entry;
+  void *param;
   TThreadID id;
   TMemorySize memSize;
   TThreadPriority priority;
   TThreadState state;
-};
+} Thread;
 
 struct Node {
   struct Node *next;
   struct Node *prev;
-  struct Thread val;
+  Thread val;
 };
 
-struct Deque {
+typedef struct {
   struct Node *head;
   struct Node *tail;
-};
+} Deque;
 
-struct Deque *dmalloc();
+Deque *dmalloc();
 
-void push_front(struct Deque *d, struct Thread v);
+void push_front(Deque *d, Thread v);
 
-void push_back(struct Deque *d, struct Thread v);
+void push_back(Deque *d, Thread v);
 
-struct Thread pop_front(struct Deque *d);
+Thread pop_front(Deque *d);
 
-struct Thread pop_back(struct Deque *d);
+Thread pop_back(Deque *d);
 
-struct Thread front(struct Deque *d);
+Thread front(Deque *d);
 
-struct Thread end(struct Deque *d);
+Thread end(Deque *d);
 
 #endif
