@@ -7,7 +7,7 @@ Deque *dmalloc() {
   return d;
 }
 
-void push_front(Deque *d, Thread v) {
+void push_front(Deque *d, Thread *v) {
   struct Node *n = (struct Node *)malloc(sizeof(struct Node));
   if (n == NULL)
     return;
@@ -22,7 +22,7 @@ void push_front(Deque *d, Thread v) {
   }
 }
 
-void push_back(Deque *d, Thread v) {
+void push_back(Deque *d, Thread *v) {
   struct Node *n = (struct Node *)malloc(sizeof(struct Node));
   if (n == NULL)
     return;
@@ -37,8 +37,10 @@ void push_back(Deque *d, Thread v) {
   }
 }
 
-Thread pop_front(Deque *d) {
-  Thread v = d->head->val;
+void removeT(Deque *d, Thread *v) { return; }
+
+Thread *pop_front(Deque *d) {
+  Thread *v = d->head->val;
   struct Node *n = d->head;
   if (d->head == d->tail)
     d->head = d->tail = NULL;
@@ -48,8 +50,8 @@ Thread pop_front(Deque *d) {
   return v;
 }
 
-Thread pop_back(Deque *d) {
-  Thread v = d->tail->val;
+Thread *pop_back(Deque *d) {
+  Thread *v = d->tail->val;
   struct Node *n = d->tail;
   if (d->head == d->tail)
     d->head = d->tail = NULL;
@@ -59,6 +61,6 @@ Thread pop_back(Deque *d) {
   return v;
 }
 
-Thread front(Deque *d) { return d->head->val; }
+Thread *front(Deque *d) { return d->head->val; }
 
-Thread end(Deque *d) { return d->tail->val; }
+Thread *end(Deque *d) { return d->tail->val; }

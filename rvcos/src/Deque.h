@@ -2,10 +2,11 @@
 #define DEQUE
 #include "RVCOS.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 typedef struct {
-  uint32_t *sp;
+  uint32_t *ctx;
   TThreadEntry entry;
   void *param;
   TThreadID id;
@@ -17,7 +18,7 @@ typedef struct {
 struct Node {
   struct Node *next;
   struct Node *prev;
-  Thread val;
+  Thread *val;
 };
 
 typedef struct {
@@ -27,16 +28,20 @@ typedef struct {
 
 Deque *dmalloc();
 
-void push_front(Deque *d, Thread v);
+void push_front(Deque *d, Thread *v);
 
-void push_back(Deque *d, Thread v);
+void push_back(Deque *d, Thread *v);
 
-Thread pop_front(Deque *d);
+void removeT(Deque *d, Thread *v);
 
-Thread pop_back(Deque *d);
+int isEmpty(Deque *d);
 
-Thread front(Deque *d);
+Thread *pop_front(Deque *d);
 
-Thread end(Deque *d);
+Thread *pop_back(Deque *d);
+
+Thread *front(Deque *d);
+
+Thread *end(Deque *d);
 
 #endif

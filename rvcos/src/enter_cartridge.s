@@ -1,5 +1,5 @@
 .section .init, "ax"
-.global enter_cartridge
+.global enter_cartridge, switch_context
 .extern saved_sp
 enter_cartridge:
     addi    sp,sp,-12
@@ -23,4 +23,26 @@ enter_cartridge:
     lw      ra,0(sp)
     addi    sp,sp,12
     ret
-    
+
+switch_context:
+    addi	sp,sp,-28
+    csrr    a5,mepc
+    sw	    a5,24(sp)
+    sw	    ra,20(sp)
+    sw	    t0,16(sp)
+    sw	    t1,12(sp)
+    sw	    t2,8(sp)
+    sw	    s0,4(sp)
+    sw	    s1,0(sp)
+    sw      sp,0(a0) # Store old sp to first param
+    mv      sp,a1 # Move second param to sp
+    lw	    a5,24(sp)
+    lw	    ra,20(sp)
+    lw	    t0,16(sp)
+    lw	    t1,12(sp)
+    lw	    t2,8(sp)
+    lw	    s0,4(sp)
+    lw	    s1,0(sp)
+    csrw    mepc,a5
+    addi    sp,sp,28
+    ret

@@ -7,20 +7,29 @@
 #include <string.h>
 
 volatile int global = 42;
+volatile int ticks = 0;
 #define CONTROLLER (*((volatile uint32_t *)0x40000018))
 
 volatile char *VIDEO_MEMORY = (volatile char *)(0x50000000 + 0xFE800);
 #define CARTRIDGE (*((volatile uint32_t *)0x4000001C))
 
-/* __attribute__((always_inline)) inline void set_tp(uint32_t tp) {
-  asm volatile("sa tp, %0" ::"r"(tp));
-} */
+typedef void (*TFunctionPointer)(void *);
+
+__attribute__((always_inline)) inline void set_tp(uint32_t tp) {
+  asm volatile("lw tp, 0(%0)" ::"r"(tp));
+}
 
 __attribute__((always_inline)) inline uint32_t get_tp(void) {
   uint32_t result;
-  asm volatile("la %0, tp" : "=r"(result));
+  asm volatile("mv tp, %0" : "=r"(result));
   return result;
 }
+
+__attribute__((always_inline)) inline void set_ra(uint32_t tp) {
+  asm volatile("lw ra, 0(%0)" ::"r"(tp));
+}
+
+void switch_context(uint32_t **oldctx, uint32_t *newctx);
 
 void write(const TTextCharacter *c, uint32_t start) {
   for (uint32_t i = 0; i < strlen(c); i++) {
@@ -39,35 +48,68 @@ void idleThread() {
     ;
 }
 
-volatile Deque *sched;
+uint32_t *initialize_stack(uint32_t *sp, void (*skeleton_or_idle)(uint32_t),
+                           uint32_t param) {
+  // push top registers if above ra if any
+  sp--;
+  *sp = (uint32_t)skeleton_or_idle; // for the ra location
+  // push other registers if any
+  sp--;
+  *sp = param; // for the a0 location
+  // push other registers if any
+  return sp;
+}
+
+// When initializing the stack you will want to put the skeleton address at the
+// location of where you would put the ra register in your context switch
+// function.
+
+// You won't be storing the entry in the ra, you will be storing the skeleton in
+// the ra when initializing the the stack. The context switch will save the ra,
+// it will be the return address of the location that called the context switch.
+void skeleton(void (*entryFn)(/* uint32_t params */)) {
+  entryFn();
+  // switch_context(uint32_t * *oldctx, uint32_t * newctx);
+}
+
+volatile Deque *high;
+volatile Deque *norm;
+volatile Deque *low;
 volatile Thread tcb[256];
 volatile int cid = 0;
 
 volatile uint32_t cart_gp;
 TStatus RVCInitialize(uint32_t *gp) {
-  sched = dmalloc();
+  high = dmalloc();
+  norm = dmalloc();
+  low = dmalloc();
   cart_gp = gp;
   // Create idle thread
-  tcb[cid].sp = malloc(1024);
+  tcb[cid].ctx = malloc(1024);
   tcb[cid].entry = idleThread;
   tcb[cid].id = cid;
-  tcb[cid].priority = RVCOS_THREAD_PRIORITY_LOW;
+  tcb[cid].priority = 0;
   tcb[cid].memSize = 1024;
   tcb[cid].state = RVCOS_THREAD_STATE_CREATED;
   cid++;
   // Create main thread
-  tcb[cid].sp = malloc(1024);
-  tcb[cid].entry = idleThread;
+  tcb[cid].ctx = NULL;
+  tcb[cid].entry = NULL;
   tcb[cid].id = cid;
-  tcb[cid].priority = RVCOS_THREAD_PRIORITY_LOW;
-  tcb[cid].memSize = 1024;
+  tcb[cid].priority = RVCOS_THREAD_PRIORITY_NORMAL;
+  tcb[cid].memSize = 0;
   tcb[cid].state = RVCOS_THREAD_STATE_CREATED;
-  cid++;
   // Make tp point to main
+  set_tp(&tcb[cid++].id);
   return RVCOS_STATUS_SUCCESS;
 }
 
-TStatus RVCTickMS(uint32_t *tickmsref) { return RVCOS_STATUS_SUCCESS; }
+TStatus RVCTickMS(uint32_t *tickmsref) {
+  if (!tickmsref)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
+  *tickmsref = 2;
+  return RVCOS_STATUS_SUCCESS;
+}
 
 TStatus RVCTickCount(TTickRef tickref) { return RVCOS_STATUS_SUCCESS; }
 
@@ -78,17 +120,43 @@ TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
   *tid = cid;
   tcb[cid].priority = prio;
   tcb[cid].memSize = memsize;
-  tcb[cid].sp = malloc(memsize);
+  tcb[cid].ctx = initialize_stack(malloc(memsize), skeleton, param);
   tcb[cid].state = RVCOS_THREAD_STATE_CREATED;
-  push_back((Deque *)sched, tcb[cid++]);
+  /*   if (prio == RVCOS_THREAD_PRIORITY_LOW)
+      push_back((Deque *)low, &tcb[cid++]);
+    else if (prio == RVCOS_THREAD_PRIORITY_NORMAL)
+      push_back((Deque *)norm, &tcb[cid++]);
+    else if (prio == RVCOS_THREAD_PRIORITY_HIGH)
+      push_back((Deque *)high, &tcb[cid++]); */
   return RVCOS_STATUS_SUCCESS;
 }
 
-TStatus RVCThreadDelete(TThreadID thread) { return RVCOS_STATUS_SUCCESS; }
+TStatus RVCThreadDelete(TThreadID thread) {
+  Thread t;
+  tcb[thread] = t;
+  return RVCOS_STATUS_SUCCESS;
+}
 
-TStatus RVCThreadActivate(TThreadID thread) { return RVCOS_STATUS_SUCCESS; }
+TStatus RVCThreadActivate(TThreadID thread) {
+  tcb[thread].state = RVCOS_THREAD_STATE_READY;
+  if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_LOW)
+    push_back((Deque *)low, &tcb[thread]);
+  else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_NORMAL)
+    push_back((Deque *)norm, &tcb[thread]);
+  else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_HIGH)
+    push_back((Deque *)high, &tcb[thread]);
+  // Sched
+  return RVCOS_STATUS_SUCCESS;
+}
 
 TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval) {
+  tcb[thread].state = RVCOS_THREAD_STATE_DEAD;
+  if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_LOW)
+    removeT((Deque *)low, &tcb[thread]);
+  else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_NORMAL)
+    removeT((Deque *)norm, &tcb[thread]);
+  else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_HIGH)
+    removeT((Deque *)high, &tcb[thread]);
   return RVCOS_STATUS_SUCCESS;
 }
 
@@ -102,6 +170,7 @@ TStatus RVCThreadID(TThreadIDRef threadref) {
 }
 
 TStatus RVCThreadState(TThreadID thread, TThreadStateRef stateref) {
+  *stateref = tcb[thread].state;
   return RVCOS_STATUS_SUCCESS;
 }
 

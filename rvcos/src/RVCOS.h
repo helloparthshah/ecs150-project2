@@ -90,7 +90,7 @@ TStatus RVCThreadID(TThreadIDRef threadref);
  places the state in the location specified by state. */
 TStatus RVCThreadState(TThreadID thread, TThreadStateRef stateref);
 /* RVCThreadSleep() puts the currently running thread to sleep for tickticks. If
- tick is specified as RVCOS_TIMEOUT_IMMEDIATEthe  current  process  yields
+ tick is specified as RVCOS_TIMEOUT_IMMEDIATE the  current  process  yields
  the  remainder  of  its  processing quantum to the next ready processof equal
  priority. */
 TStatus RVCThreadSleep(TTick tick);

@@ -1,7 +1,7 @@
 .section .text, "ax"
 .global _interrupt_handler
 
-_interrupt_handler: # Saves the regs, calls the c handler and then restores the registers
+_interrupt_handler:
     csrw    mscratch,ra
     csrr    ra,mcause
     addi    ra,ra,-11 #Sub 11 is 0 then ecall else something else
@@ -21,7 +21,7 @@ _interrupt_handler: # Saves the regs, calls the c handler and then restores the 
     csrw    mepc,ra
     mret
 
-hardware_interrupt:
+hardware_interrupt: # Saves the regs, calls the c handler and then restores the registers
     csrr    ra,mscratch
     addi	sp,sp,-40 # Move back 40 to save 10 regs
     sw	    ra,36(sp)
