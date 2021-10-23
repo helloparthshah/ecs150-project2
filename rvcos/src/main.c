@@ -113,9 +113,7 @@ void scheduler() {
       push_back((Deque *)high, old_running);
   }
 
-  // print(high, 8);
-  if (high->head)
-    writei(high->head->val, 8);
+  print(high, 8);
 
   if (isEmpty(high) == 0) {
     curr_running = pop_front(high);
