@@ -7,100 +7,159 @@
 #include <string.h>
 
 volatile int global = 42;
-volatile int ticks = 0;
 #define CONTROLLER (*((volatile uint32_t *)0x40000018))
 
 volatile char *VIDEO_MEMORY = (volatile char *)(0x50000000 + 0xFE800);
 #define CARTRIDGE (*((volatile uint32_t *)0x4000001C))
 
-typedef void (*TFunctionPointer)(void *);
-
-__attribute__((always_inline)) inline void set_tp(uint32_t tp) {
-  asm volatile("lw tp, 0(%0)" ::"r"(tp));
-}
-
-__attribute__((always_inline)) inline uint32_t get_tp(void) {
-  uint32_t result;
-  asm volatile("mv tp, %0" : "=r"(result));
-  return result;
-}
-
-__attribute__((always_inline)) inline void set_ra(uint32_t tp) {
-  asm volatile("lw ra, 0(%0)" ::"r"(tp));
-}
-
-void switch_context(uint32_t **oldctx, uint32_t *newctx);
-
-void write(const TTextCharacter *c, uint32_t start) {
+void write(const TTextCharacter *c, uint32_t line) {
   for (uint32_t i = 0; i < strlen(c); i++) {
-    VIDEO_MEMORY[start + i] = c[i];
+    VIDEO_MEMORY[line * 0x40 + i] = c[i];
   }
 }
 
 void writei(uint32_t c, int line) {
   char hex[32];
   sprintf(hex, "%x", c);
-  write(hex, line * 0x40);
+  write(hex, line);
 }
 
-void idleThread() {
+typedef uint32_t (*TEntry)(uint32_t param);
+
+__attribute__((always_inline)) inline void set_tp(uint32_t tp) {
+  asm volatile("lw tp, 0(%0)" ::"r"(&tp));
+}
+
+__attribute__((always_inline)) inline uint32_t get_tp(void) {
+  uint32_t result;
+  asm volatile("mv %0,tp" : "=r"(result));
+  return result;
+}
+
+// uint32_t get_tp();
+
+__attribute__((always_inline)) inline void set_ra(uint32_t tp) {
+  asm volatile("lw ra, 0(%0)" ::"r"(tp));
+}
+
+extern void csr_enable_interrupts(void);
+
+extern void csr_disable_interrupts(void);
+
+uint32_t idleThread(uint32_t param) {
+  write("Idle", 15);
+  csr_enable_interrupts();
   while (1)
     ;
 }
 
-uint32_t *initialize_stack(uint32_t *sp, void (*skeleton_or_idle)(uint32_t),
-                           uint32_t param) {
-  // push top registers if above ra if any
+void switch_context(uint32_t **oldctx, uint32_t *newctx);
+
+uint32_t call_on_other_gp(uint32_t param, TEntry entry, uint32_t gp);
+
+uint32_t *initialize_stack(uint32_t *sp, TEntry fun, uint32_t param,
+                           uint32_t tp) {
   sp--;
-  *sp = (uint32_t)skeleton_or_idle; // for the ra location
-  // push other registers if any
+  *sp = fun; // sw      ra,48(sp)
   sp--;
-  *sp = param; // for the a0 location
-  // push other registers if any
+  *sp = tp; // sw      tp,44(sp)
+  sp--;
+  *sp = 0; // sw      t0,40(sp)
+  sp--;
+  *sp = 0; // sw      t1,36(sp)
+  sp--;
+  *sp = 0; // sw      t2,32(sp)
+  sp--;
+  *sp = 0; // sw      s0,28(sp)
+  sp--;
+  *sp = 0; // sw      s1,24(sp)
+  sp--;
+  *sp = param; // sw      a0,20(sp)
+  sp--;
+  *sp = 0; // sw      a1,16(sp)
+  sp--;
+  *sp = 0; // sw      a2,12(sp)
+  sp--;
+  *sp = 0; // sw      a3,8(sp)
+  sp--;
+  *sp = 0; // sw      a4,4(sp)
+  sp--;
+  *sp = 0; // sw      a5,0(sp)
   return sp;
-}
-
-// When initializing the stack you will want to put the skeleton address at the
-// location of where you would put the ra register in your context switch
-// function.
-
-// You won't be storing the entry in the ra, you will be storing the skeleton in
-// the ra when initializing the the stack. The context switch will save the ra,
-// it will be the return address of the location that called the context switch.
-void skeleton(void (*entryFn)(/* uint32_t params */)) {
-  entryFn();
-  // switch_context(uint32_t * *oldctx, uint32_t * newctx);
 }
 
 volatile Deque *high;
 volatile Deque *norm;
 volatile Deque *low;
 volatile Thread tcb[256];
-volatile int cid = 0;
-
+volatile int id_count = 0;
+volatile int curr_running = 1;
+volatile int ticks = 0;
 volatile uint32_t cart_gp;
+
+void scheduler() {
+  uint32_t old_running = curr_running;
+
+  tcb[old_running].state = RVCOS_THREAD_STATE_READY;
+
+  if (old_running != 1) {
+    if (tcb[old_running].priority == RVCOS_THREAD_PRIORITY_LOW)
+      push_back((Deque *)low, old_running);
+    else if (tcb[old_running].priority == RVCOS_THREAD_PRIORITY_NORMAL)
+      push_back((Deque *)norm, old_running);
+    else if (tcb[old_running].priority == RVCOS_THREAD_PRIORITY_HIGH)
+      push_back((Deque *)high, old_running);
+  }
+
+  if (isEmpty(high) == 0) {
+    curr_running = pop_front(high);
+  } else if (isEmpty(norm) == 0) {
+    curr_running = pop_front(norm);
+  } else if (isEmpty(low) == 0) {
+    curr_running = pop_front(low);
+  } else {
+    curr_running = 0;
+  }
+
+  tcb[curr_running].state = RVCOS_THREAD_STATE_RUNNING;
+
+  switch_context((uint32_t **)&tcb[old_running].ctx, tcb[curr_running].ctx);
+  writei(curr_running, 10);
+}
+
+void skeleton() {
+  set_tp(curr_running);
+  uint32_t (*entry)(void *) = tcb[curr_running].entry;
+  csr_enable_interrupts();
+  uint32_t ret_value = call_on_other_gp(tcb[curr_running].param,
+                                        tcb[curr_running].entry, cart_gp);
+  csr_disable_interrupts();
+  writei(curr_running, 16);
+  RVCThreadTerminate(curr_running, ret_value);
+}
+
 TStatus RVCInitialize(uint32_t *gp) {
   high = dmalloc();
   norm = dmalloc();
   low = dmalloc();
   cart_gp = gp;
   // Create idle thread
-  tcb[cid].ctx = malloc(1024);
-  tcb[cid].entry = idleThread;
-  tcb[cid].id = cid;
-  tcb[cid].priority = 0;
-  tcb[cid].memSize = 1024;
-  tcb[cid].state = RVCOS_THREAD_STATE_CREATED;
-  cid++;
+  tcb[id_count].ctx = malloc(1024);
+  tcb[id_count].entry = idleThread;
+  tcb[id_count].id = id_count;
+  tcb[id_count].priority = 0;
+  tcb[id_count].memsize = 1024;
+  tcb[id_count].state = RVCOS_THREAD_STATE_CREATED;
+  id_count++;
   // Create main thread
-  tcb[cid].ctx = NULL;
-  tcb[cid].entry = NULL;
-  tcb[cid].id = cid;
-  tcb[cid].priority = RVCOS_THREAD_PRIORITY_NORMAL;
-  tcb[cid].memSize = 0;
-  tcb[cid].state = RVCOS_THREAD_STATE_CREATED;
+  tcb[id_count].ctx = NULL;
+  tcb[id_count].entry = NULL;
+  tcb[id_count].id = id_count;
+  tcb[id_count].priority = RVCOS_THREAD_PRIORITY_NORMAL;
+  tcb[id_count].memsize = 0;
+  tcb[id_count].state = RVCOS_THREAD_STATE_RUNNING;
   // Make tp point to main
-  set_tp(&tcb[cid++].id);
+  set_tp(tcb[id_count++].id);
   return RVCOS_STATUS_SUCCESS;
 }
 
@@ -111,56 +170,94 @@ TStatus RVCTickMS(uint32_t *tickmsref) {
   return RVCOS_STATUS_SUCCESS;
 }
 
-TStatus RVCTickCount(TTickRef tickref) { return RVCOS_STATUS_SUCCESS; }
+TStatus RVCTickCount(TTickRef tickref) {
+  *tickref = ticks;
+  return RVCOS_STATUS_SUCCESS;
+}
 
 TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
                         TThreadPriority prio, TThreadIDRef tid) {
-  tcb[cid].entry = entry;
-  tcb[cid].id = cid;
-  *tid = cid;
-  tcb[cid].priority = prio;
-  tcb[cid].memSize = memsize;
-  tcb[cid].ctx = initialize_stack(malloc(memsize), skeleton, param);
-  tcb[cid].state = RVCOS_THREAD_STATE_CREATED;
-  /*   if (prio == RVCOS_THREAD_PRIORITY_LOW)
-      push_back((Deque *)low, &tcb[cid++]);
-    else if (prio == RVCOS_THREAD_PRIORITY_NORMAL)
-      push_back((Deque *)norm, &tcb[cid++]);
-    else if (prio == RVCOS_THREAD_PRIORITY_HIGH)
-      push_back((Deque *)high, &tcb[cid++]); */
+  tcb[id_count].entry = entry;
+  tcb[id_count].id = id_count;
+  *tid = id_count;
+  tcb[id_count].priority = prio;
+  tcb[id_count].param = param;
+  tcb[id_count].memsize = memsize;
+  tcb[id_count].state = RVCOS_THREAD_STATE_CREATED;
+
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCThreadDelete(TThreadID thread) {
   Thread t;
+  free(tcb[thread].ctx);
   tcb[thread] = t;
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCThreadActivate(TThreadID thread) {
+  tcb[thread].ctx = initialize_stack(malloc(tcb[thread].memsize), skeleton,
+                                     tcb[thread].param, id_count);
   tcb[thread].state = RVCOS_THREAD_STATE_READY;
   if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_LOW)
-    push_back((Deque *)low, &tcb[thread]);
+    push_back((Deque *)low, thread);
   else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_NORMAL)
-    push_back((Deque *)norm, &tcb[thread]);
+    push_back((Deque *)norm, thread);
   else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_HIGH)
-    push_back((Deque *)high, &tcb[thread]);
-  // Sched
+    push_back((Deque *)high, thread);
+
+  scheduler();
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval) {
   tcb[thread].state = RVCOS_THREAD_STATE_DEAD;
+  // If current is waited by then set all to ready
+  if (tcb[thread].waited_by)
+    while (isEmpty(tcb[thread].waited_by) == 0) {
+      uint32_t wid = pop_front(tcb[thread].waited_by);
+      tcb[wid].state = RVCOS_THREAD_STATE_READY;
+      if (tcb[wid].priority == RVCOS_THREAD_PRIORITY_LOW)
+        push_back((Deque *)low, wid);
+      else if (tcb[wid].priority == RVCOS_THREAD_PRIORITY_NORMAL)
+        push_back((Deque *)norm, wid);
+      else if (tcb[wid].priority == RVCOS_THREAD_PRIORITY_HIGH)
+        push_back((Deque *)high, wid);
+    }
+
   if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_LOW)
-    removeT((Deque *)low, &tcb[thread]);
+    removeT((Deque *)low, thread);
   else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_NORMAL)
-    removeT((Deque *)norm, &tcb[thread]);
+    removeT((Deque *)norm, thread);
   else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_HIGH)
-    removeT((Deque *)high, &tcb[thread]);
+    removeT((Deque *)high, thread);
+  curr_running = 1;
+  tcb[curr_running].state = RVCOS_THREAD_STATE_RUNNING;
+  csr_enable_interrupts();
+  scheduler();
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCThreadWait(TThreadID thread, TThreadReturnRef returnref) {
+  tcb[curr_running].state = RVCOS_THREAD_STATE_WAITING;
+
+  if (!tcb[thread].waited_by)
+    tcb[thread].waited_by = dmalloc();
+  push_back(tcb[thread].waited_by, curr_running);
+  while (tcb[thread].state != RVCOS_THREAD_STATE_DEAD) {
+    scheduler();
+  }
+
+  /*   tcb[curr_running].state = RVCOS_THREAD_STATE_READY;
+
+    if (tcb[curr_running].priority == RVCOS_THREAD_PRIORITY_LOW)
+      push_back((Deque *)low, curr_running);
+    else if (tcb[curr_running].priority == RVCOS_THREAD_PRIORITY_NORMAL)
+      push_back((Deque *)norm, curr_running);
+    else if (tcb[curr_running].priority == RVCOS_THREAD_PRIORITY_HIGH)
+      push_back((Deque *)high, curr_running); */
+
+  scheduler();
   return RVCOS_STATUS_SUCCESS;
 }
 
@@ -174,7 +271,10 @@ TStatus RVCThreadState(TThreadID thread, TThreadStateRef stateref) {
   return RVCOS_STATUS_SUCCESS;
 }
 
-TStatus RVCThreadSleep(TTick tick) { return RVCOS_STATUS_SUCCESS; }
+TStatus RVCThreadSleep(TTick tick) {
+  scheduler();
+  return RVCOS_STATUS_SUCCESS;
+}
 
 volatile int cursor = 0;
 TStatus RVCWriteText(const TTextCharacter *buffer, TMemorySize writesize) {
@@ -219,15 +319,18 @@ volatile uint32_t *saved_sp;
 
 int main() {
   saved_sp = &CONTROLLER;
-  char i = 'a';
   while (1) {
-    // writei(global, 9);
-    // writei(CONTROLLER, 8);
+    writei(global, 20);
+    writei(CARTRIDGE & 0x1, 21);
     if (CARTRIDGE & 0x1 && isInit == 0) {
       isInit = 1;
       enter_cartridge();
     }
     if (!(CARTRIDGE & 0x1) && isInit == 1) {
+      cursor = 0;
+      for (int i = 0; i < 36 * 64; i++) {
+        VIDEO_MEMORY[i] = ' ';
+      }
       isInit = 0;
     }
   }

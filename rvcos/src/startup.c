@@ -48,7 +48,7 @@ __attribute__((always_inline)) extern inline void csr_enable_interrupts(void) {
   asm volatile("csrsi mstatus, 0x8");
 }
 
-__attribute__((always_inline)) inline void csr_disable_interrupts(void) {
+__attribute__((always_inline)) extern inline void csr_disable_interrupts(void) {
   asm volatile("csrci mstatus, 0x8");
 }
 
@@ -71,10 +71,10 @@ void init(void) {
     *Base++ = 0;
   }
 
-  /* csr_write_mie(0x888);    // Enable all interrupt sources
+  csr_write_mie(0x888);    // Enable all interrupt sources
   csr_enable_interrupts(); // Global interrupt enable
   MTIMECMP_LOW = 1;
-  MTIMECMP_HIGH = 0; */
+  MTIMECMP_HIGH = 0;
 }
 
 extern volatile int global;
