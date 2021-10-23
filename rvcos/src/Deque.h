@@ -25,9 +25,12 @@ typedef struct {
   TThreadPriority priority;
   TThreadState state;
   Deque *waited_by;
+  uint32_t return_val;
 } Thread;
 
 Deque *dmalloc();
+
+void print(Deque *d, uint32_t line);
 
 void push_front(Deque *d, TThreadID v);
 

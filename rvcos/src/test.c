@@ -1,6 +1,30 @@
-#include "Deque.h"
+#include "RVCOS.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+struct Node {
+  struct Node *next;
+  struct Node *prev;
+  TThreadID val;
+};
+
+typedef struct {
+  struct Node *head;
+  struct Node *tail;
+} Deque;
+
+typedef struct {
+  uint32_t *ctx;
+  TThreadEntry entry;
+  void *param;
+  TThreadID id;
+  TMemorySize memsize;
+  TThreadPriority priority;
+  TThreadState state;
+  Deque *waited_by;
+  uint32_t return_val;
+} Thread;
 
 Deque *dmalloc() {
   Deque *d = (Deque *)malloc(sizeof(Deque));
@@ -63,8 +87,6 @@ void removeT(Deque *d, TThreadID v) {
     n->prev->next = n->next;
     if (n->next != NULL)
       n->next->prev = n->prev;
-    else
-      d->tail = n->prev;
   }
   free(n);
   return;
@@ -97,17 +119,25 @@ TThreadID front(Deque *d) { return d->head->val; }
 TThreadID end(Deque *d) { return d->tail->val; }
 
 void writei(uint32_t, uint32_t);
-void write(char *, uint32_t);
 void print(Deque *d, uint32_t line) {
-  // write("        ", line);
-  if (d->head == NULL) {
-    // writei(-1, line);
+  if (d->head == d->tail) {
+    writei(-1, line);
     return;
   }
   struct Node *n = d->head;
   while (n != NULL) {
-    writei(n->val, line++);
+    printf("%i", n->val);
     n = n->next;
   }
   free(n);
+}
+
+int main() {
+  Deque *d = dmalloc();
+  push_back(d, 0);
+  push_back(d, 1);
+  push_back(d, 2);
+  removeT(d, 2);
+  print(d, 0);
+  return 1;
 }

@@ -49,7 +49,7 @@ extern void csr_enable_interrupts(void);
 extern void csr_disable_interrupts(void);
 
 uint32_t idleThread(uint32_t param) {
-  write("Idle", 15);
+  write("Idle", 63);
   csr_enable_interrupts();
   while (1)
     ;
@@ -102,9 +102,9 @@ volatile uint32_t cart_gp;
 void scheduler() {
   uint32_t old_running = curr_running;
 
-  tcb[old_running].state = RVCOS_THREAD_STATE_READY;
+  if (tcb[old_running].state == RVCOS_THREAD_STATE_RUNNING) {
+    tcb[old_running].state = RVCOS_THREAD_STATE_READY;
 
-  if (old_running != 1) {
     if (tcb[old_running].priority == RVCOS_THREAD_PRIORITY_LOW)
       push_back((Deque *)low, old_running);
     else if (tcb[old_running].priority == RVCOS_THREAD_PRIORITY_NORMAL)
@@ -112,6 +112,10 @@ void scheduler() {
     else if (tcb[old_running].priority == RVCOS_THREAD_PRIORITY_HIGH)
       push_back((Deque *)high, old_running);
   }
+
+  // print(high, 8);
+  if (high->head)
+    writei(high->head->val, 8);
 
   if (isEmpty(high) == 0) {
     curr_running = pop_front(high);
@@ -123,10 +127,15 @@ void scheduler() {
     curr_running = 0;
   }
 
+  if (curr_running == 2)
+    write("Running 2", 9);
+
+  // if (tcb[curr_running].state == RVCOS_THREAD_STATE_READY) {
   tcb[curr_running].state = RVCOS_THREAD_STATE_RUNNING;
 
-  switch_context((uint32_t **)&tcb[old_running].ctx, tcb[curr_running].ctx);
-  writei(curr_running, 10);
+  if (old_running != curr_running)
+    switch_context((uint32_t **)&tcb[old_running].ctx, tcb[curr_running].ctx);
+  // }
 }
 
 void skeleton() {
@@ -136,7 +145,6 @@ void skeleton() {
   uint32_t ret_value = call_on_other_gp(tcb[curr_running].param,
                                         tcb[curr_running].entry, cart_gp);
   csr_disable_interrupts();
-  writei(curr_running, 16);
   RVCThreadTerminate(curr_running, ret_value);
 }
 
@@ -186,7 +194,7 @@ TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
   tcb[id_count].param = param;
   tcb[id_count].memsize = memsize;
   tcb[id_count].state = RVCOS_THREAD_STATE_CREATED;
-
+  id_count++;
   return RVCOS_STATUS_SUCCESS;
 }
 
@@ -198,6 +206,8 @@ TStatus RVCThreadDelete(TThreadID thread) {
 }
 
 TStatus RVCThreadActivate(TThreadID thread) {
+  // print(low, 15);
+
   tcb[thread].ctx = initialize_stack(malloc(tcb[thread].memsize), skeleton,
                                      tcb[thread].param, id_count);
   tcb[thread].state = RVCOS_THREAD_STATE_READY;
@@ -208,14 +218,17 @@ TStatus RVCThreadActivate(TThreadID thread) {
   else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_HIGH)
     push_back((Deque *)high, thread);
 
+  print(high, 16);
+
   scheduler();
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval) {
   tcb[thread].state = RVCOS_THREAD_STATE_DEAD;
+  tcb[thread].return_val = returnval;
   // If current is waited by then set all to ready
-  if (tcb[thread].waited_by)
+  if (tcb[thread].waited_by != NULL)
     while (isEmpty(tcb[thread].waited_by) == 0) {
       uint32_t wid = pop_front(tcb[thread].waited_by);
       tcb[wid].state = RVCOS_THREAD_STATE_READY;
@@ -233,33 +246,31 @@ TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval) {
     removeT((Deque *)norm, thread);
   else if (tcb[thread].priority == RVCOS_THREAD_PRIORITY_HIGH)
     removeT((Deque *)high, thread);
-  curr_running = 1;
-  tcb[curr_running].state = RVCOS_THREAD_STATE_RUNNING;
-  csr_enable_interrupts();
+
   scheduler();
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCThreadWait(TThreadID thread, TThreadReturnRef returnref) {
-  tcb[curr_running].state = RVCOS_THREAD_STATE_WAITING;
+  TThreadID wid = curr_running;
+  tcb[wid].state = RVCOS_THREAD_STATE_WAITING;
 
-  if (!tcb[thread].waited_by)
+  if (tcb[wid].priority == RVCOS_THREAD_PRIORITY_LOW)
+    removeT((Deque *)low, wid);
+  else if (tcb[wid].priority == RVCOS_THREAD_PRIORITY_NORMAL)
+    removeT((Deque *)norm, wid);
+  else if (tcb[wid].priority == RVCOS_THREAD_PRIORITY_HIGH)
+    removeT((Deque *)high, wid);
+
+  if (tcb[thread].waited_by == NULL)
     tcb[thread].waited_by = dmalloc();
-  push_back(tcb[thread].waited_by, curr_running);
+  push_back(tcb[thread].waited_by, wid);
+
   while (tcb[thread].state != RVCOS_THREAD_STATE_DEAD) {
     scheduler();
   }
 
-  /*   tcb[curr_running].state = RVCOS_THREAD_STATE_READY;
-
-    if (tcb[curr_running].priority == RVCOS_THREAD_PRIORITY_LOW)
-      push_back((Deque *)low, curr_running);
-    else if (tcb[curr_running].priority == RVCOS_THREAD_PRIORITY_NORMAL)
-      push_back((Deque *)norm, curr_running);
-    else if (tcb[curr_running].priority == RVCOS_THREAD_PRIORITY_HIGH)
-      push_back((Deque *)high, curr_running); */
-
-  scheduler();
+  *returnref = tcb[thread].return_val;
   return RVCOS_STATUS_SUCCESS;
 }
 
