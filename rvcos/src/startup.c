@@ -40,7 +40,7 @@ __attribute__((always_inline)) inline void csr_mstatus_write(uint32_t val) {
   asm volatile("csrw mstatus, %0" : : "r"(val));
 }
 
-__attribute__((always_inline)) inline void csr_write_mie(uint32_t val) {
+__attribute__((always_inline)) extern inline void csr_write_mie(uint32_t val) {
   asm volatile("csrw mie, %0" : : "r"(val));
 }
 
@@ -71,8 +71,8 @@ void init(void) {
     *Base++ = 0;
   }
 
-  csr_write_mie(0x888);    // Enable all interrupt sources
-  csr_enable_interrupts(); // Global interrupt enable
+  /* csr_write_mie(0x888);    // Enable all interrupt sources
+  csr_enable_interrupts(); // Global interrupt enable */
   MTIMECMP_LOW = 1;
   MTIMECMP_HIGH = 0;
 }

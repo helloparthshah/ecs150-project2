@@ -42,6 +42,8 @@ __attribute__((always_inline)) inline void set_ra(uint32_t tp) {
   asm volatile("lw ra, 0(%0)" ::"r"(tp));
 }
 
+extern void csr_write_mie(uint32_t);
+
 extern void csr_enable_interrupts(void);
 
 extern void csr_disable_interrupts(void);
@@ -318,15 +320,19 @@ volatile int isInit = 0;
 volatile uint32_t *saved_sp;
 
 int main() {
+  csr_enable_interrupts();
+  csr_write_mie(0x888);
   saved_sp = &CONTROLLER;
   while (1) {
     writei(global, 20);
     writei(CARTRIDGE & 0x1, 21);
     if (CARTRIDGE & 0x1 && isInit == 0) {
       isInit = 1;
+      csr_disable_interrupts();
       enter_cartridge();
     }
     if (!(CARTRIDGE & 0x1) && isInit == 1) {
+      csr_enable_interrupts();
       cursor = 0;
       for (int i = 0; i < 36 * 64; i++) {
         VIDEO_MEMORY[i] = ' ';
