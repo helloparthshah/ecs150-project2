@@ -77,13 +77,15 @@ void init(void) {
   MTIMECMP_HIGH = 0;
 }
 
-extern volatile int global;
+extern volatile uint32_t ticks;
 extern volatile uint32_t controller_status;
+extern void scheduler();
 
 void c_interrupt_handler(void) {
   uint64_t NewCompare = (((uint64_t)MTIMECMP_HIGH) << 32) | MTIMECMP_LOW;
-  NewCompare += 100;
+  NewCompare += 20;
   MTIMECMP_HIGH = NewCompare >> 32;
   MTIMECMP_LOW = NewCompare;
-  global++;
+  ticks++;
+  scheduler();
 }

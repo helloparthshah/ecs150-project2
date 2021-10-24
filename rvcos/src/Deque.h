@@ -26,23 +26,25 @@ typedef struct {
   TThreadState state;
   Deque *waited_by;
   uint32_t return_val;
+  int sleep_for;
+  int is_sleeping;
 } Thread;
 
 Deque *dmalloc();
 
-void print(Deque *d, uint32_t line);
+void print(volatile Deque *d, uint32_t line);
 
-void push_front(Deque *d, TThreadID v);
+void push_front(volatile Deque *d, TThreadID v);
+void push_back(volatile Deque *d, TThreadID v);
 
-void push_back(Deque *d, TThreadID v);
+void removeT(volatile Deque *d, TThreadID v);
 
-void removeT(Deque *d, TThreadID v);
+int isEmpty(volatile Deque *d);
 
-int isEmpty(Deque *d);
+TThreadID pop_front(volatile Deque *d);
+TThreadID pop_back(volatile Deque *d);
 
-TThreadID pop_front(Deque *d);
-TThreadID pop_back(Deque *d);
-TThreadID front(Deque *d);
-TThreadID end(Deque *d);
+TThreadID front(volatile Deque *d);
+TThreadID end(volatile Deque *d);
 
 #endif
