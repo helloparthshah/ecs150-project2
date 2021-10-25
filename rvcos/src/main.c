@@ -171,10 +171,14 @@ TThreadReturn skeleton(void *param) {
 }
 
 TStatus RVCInitialize(uint32_t *gp) {
+  if (gp == NULL)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   // Allocating memory to the priority deques
   high = dmalloc();
   norm = dmalloc();
   low = dmalloc();
+  if (high == NULL || norm == NULL || low == NULL)
+    return RVCOS_STATUS_FAILURE;
   // Storing the cartridge gp
   cart_gp = (uint32_t)gp;
   // Create idle thread
@@ -199,13 +203,15 @@ TStatus RVCInitialize(uint32_t *gp) {
 
 TStatus RVCTickMS(uint32_t *tickmsref) {
   // Returnign the current ticksms
-  if (!tickmsref)
+  if (tickmsref == NULL)
     return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   *tickmsref = 2;
   return RVCOS_STATUS_SUCCESS;
 }
 
 TStatus RVCTickCount(TTickRef tickref) {
+  if (tickref == NULL)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   // Returning the current tick count
   *tickref = ticks;
   return RVCOS_STATUS_SUCCESS;
@@ -213,6 +219,8 @@ TStatus RVCTickCount(TTickRef tickref) {
 
 TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
                         TThreadPriority prio, TThreadIDRef tid) {
+  if (entry == NULL || tid == NULL || memsize == 0 || prio > 3)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   // Creating the thread and adding to the tcb
   tcb[id_count].entry = entry;
   tcb[id_count].id = id_count;
@@ -227,6 +235,8 @@ TStatus RVCThreadCreate(TThreadEntry entry, void *param, TMemorySize memsize,
 }
 
 TStatus RVCThreadDelete(TThreadID thread) {
+  if (tcb[thread].id != thread)
+    return RVCOS_STATUS_ERROR_INVALID_ID;
   Thread t;
   free(tcb[thread].ctx);
   tcb[thread] = t;
@@ -234,10 +244,14 @@ TStatus RVCThreadDelete(TThreadID thread) {
 }
 
 TStatus RVCThreadActivate(TThreadID thread) {
+  if (tcb[thread].id != thread)
+    return RVCOS_STATUS_ERROR_INVALID_ID;
   // Initializing context
   tcb[thread].ctx =
       initialize_stack(malloc(tcb[thread].memsize) + tcb[thread].memsize,
                        skeleton, tcb[thread].param, id_count);
+  if (tcb[thread].ctx == NULL)
+    return RVCOS_STATUS_FAILURE;
   //  Setting the state to ready
   tcb[thread].state = RVCOS_THREAD_STATE_READY;
   // Pushing the the priority deque
@@ -253,6 +267,8 @@ TStatus RVCThreadActivate(TThreadID thread) {
 }
 
 TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval) {
+  if (tcb[thread].id != thread)
+    return RVCOS_STATUS_ERROR_INVALID_ID;
   // Setting state to dead
   tcb[thread].state = RVCOS_THREAD_STATE_DEAD;
   // Setting the return value
@@ -283,6 +299,10 @@ TStatus RVCThreadTerminate(TThreadID thread, TThreadReturn returnval) {
 }
 
 TStatus RVCThreadWait(TThreadID thread, TThreadReturnRef returnref) {
+  if (tcb[thread].id != thread)
+    return RVCOS_STATUS_ERROR_INVALID_ID;
+  if (returnref == NULL)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   TThreadID wid = curr_running;
   // Setting state to waiting
   tcb[wid].state = RVCOS_THREAD_STATE_WAITING;
@@ -298,6 +318,8 @@ TStatus RVCThreadWait(TThreadID thread, TThreadReturnRef returnref) {
   // Adding to the waiting queue
   if (tcb[thread].waited_by == NULL)
     tcb[thread].waited_by = dmalloc();
+  if (tcb[thread].waited_by == NULL)
+    return RVCOS_STATUS_FAILURE;
   push_back(tcb[thread].waited_by, wid);
 
   // Scheduling till it's dead
@@ -339,6 +361,10 @@ TStatus RVCThreadID(TThreadIDRef threadref) {
 }
 
 TStatus RVCThreadState(TThreadID thread, TThreadStateRef stateref) {
+  if (tcb[thread].id != thread)
+    return RVCOS_STATUS_ERROR_INVALID_ID;
+  if (stateref == NULL)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   // returning the state
   *stateref = tcb[thread].state;
   return RVCOS_STATUS_SUCCESS;
@@ -346,6 +372,8 @@ TStatus RVCThreadState(TThreadID thread, TThreadStateRef stateref) {
 
 volatile int cursor = 0;
 TStatus RVCWriteText(const TTextCharacter *buffer, TMemorySize writesize) {
+  if (buffer == NULL)
+    return RVCOS_STATUS_ERROR_INVALID_PARAMETER;
   // Looping through the buffer
   for (uint32_t i = 0; i < writesize; i++) {
     // if backspace move cursor back
@@ -393,6 +421,7 @@ int main() {
     }
     if (!(CARTRIDGE & 0x1) && isInit == 1) {
       cursor = 0;
+      ticks = 0;
       for (int i = 0; i < 36 * 64; i++) {
         VIDEO_MEMORY[i] = ' ';
       }
